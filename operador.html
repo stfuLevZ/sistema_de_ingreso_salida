@@ -1,0 +1,1144 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Control de Acceso - INTI</title>
+    
+    <!-- Dependencias Externas Limpias -->
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+
+    <style>
+        /* Reglas CSS de Impresión Limpia de Reportes */
+        @media print {
+            body * {
+                visibility: hidden;
+            }
+            #contenido-preview-reporte, #contenido-preview-reporte *, 
+            #seccion-reporte-individual, #seccion-reporte-individual *,
+            #seccion-expediente-individual-imprimir, #seccion-expediente-individual-imprimir * {
+                visibility: visible;
+            }
+            #contenido-preview-reporte, #seccion-reporte-individual, #seccion-expediente-individual-imprimir {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                border: none !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                background: white !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            
+            /* Oculta las aulas/secciones que NO tengan la clase activa de impresión */
+            .modo-impresion-selectiva .card-seccion-reporte:not(.seleccionada-para-imprimir) {
+                display: none !important;
+                height: 0 !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 font-sans min-h-screen flex flex-col relative">
+
+    <!-- Pantalla de Login -->
+    <div id="pantalla-login" class="fixed inset-0 z-50 flex items-center justify-center bg-gradient-to-br from-emerald-900 via-emerald-800 to-emerald-950 p-4">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden border border-emerald-700/20 transform transition-all">
+            
+            <div class="bg-gradient-to-r from-emerald-600 to-emerald-700 p-8 text-center relative">
+                <div class="absolute -top-10 -right-10 w-32 h-32 bg-yellow-400/20 rounded-full blur-xl"></div>
+                <div class="absolute -bottom-10 -left-10 w-24 h-24 bg-yellow-300/10 rounded-full blur-lg"></div>
+                
+                <div class="bg-yellow-400 text-emerald-950 w-16 h-16 mx-auto rounded-2xl flex items-center justify-center text-2xl font-black shadow-lg mb-3 tracking-tighter">
+                    INTI
+                </div>
+                <h2 class="text-white text-xl font-black tracking-wide uppercase">Control de Accesos</h2>
+                <p class="text-emerald-100 text-xs mt-1 font-medium">Identifíquese para ingresar al sistema</p>
+            </div>
+
+            <div class="p-8">
+                <div id="login-error" class="hidden bg-red-50 border-l-4 border-red-500 p-3 rounded-r-xl mb-4 text-xs font-bold text-red-700 flex items-center gap-2">
+                    <i data-lucide="alert-circle" class="w-4 h-4 shrink-0"></i>
+                    <span>Usuario o contraseña incorrectos.</span>
+                </div>
+
+                <div class="space-y-5">
+                    <div>
+                        <label class="block text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1.5">Usuario institucional</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-emerald-600">
+                                <i data-lucide="user" class="w-4 h-4"></i>
+                            </span>
+                            <input type="text" id="login-usuario" placeholder="Ej: director o operador" class="w-full bg-slate-50 border-2 border-slate-200 focus:border-yellow-400 focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium transition-all focus:outline-none text-slate-800">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1.5">Contraseña de acceso</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 flex items-center pl-3.5 text-emerald-600">
+                                <i data-lucide="lock" class="w-4 h-4"></i>
+                            </span>
+                            <input type="password" id="login-password" placeholder="••••••••" class="w-full bg-slate-50 border-2 border-slate-200 focus:border-yellow-400 focus:bg-white rounded-xl pl-10 pr-4 py-2.5 text-sm font-medium transition-all focus:outline-none text-slate-800">
+                        </div>
+                    </div>
+
+                    <button onclick="procesarLogin()" class="w-full bg-yellow-400 hover:bg-yellow-500 text-emerald-950 font-black py-3 rounded-xl shadow-md border-b-4 border-yellow-600 transition-all cursor-pointer text-sm uppercase tracking-wider mt-2 flex items-center justify-center gap-2">
+                        Ingresar al Sistema <i data-lucide="arrow-right" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                
+                <div class="mt-6 text-center">
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Instituto Nacional Técnico Industrial · AccessTrace 2026</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interfaz Principal del Sistema -->
+    <div id="interfaz-sistema" class="hidden flex-1 flex flex-col">
+
+        <div id="modal-alerta-central" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs transition-all">
+            <div class="bg-white rounded-2xl shadow-2xl border-2 p-8 max-w-md w-full mx-4 text-center transform scale-100 transition-transform">
+                <div id="alerta-central-icono" class="w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-3 shadow-inner"></div>
+                <h3 id="alerta-central-titulo" class="text-2xl font-black uppercase tracking-wide mb-1"></h3>
+                <p id="alerta-central-estudiante" class="text-slate-800 font-bold text-md mb-1"></p>
+                <p id="alerta-central-detalles" class="text-slate-500 text-xs font-mono mb-2"></p>
+                <p class="text-[10px] text-slate-400 font-semibold uppercase tracking-tight mt-4">El sistema continuará escaneando automáticamente...</p>
+            </div>
+        </div>
+
+        <header class="bg-slate-900 text-white px-6 py-4 flex flex-col md:flex-row justify-between items-center shadow-md gap-4 no-print">
+            <div class="flex items-center gap-3">
+                <div class="bg-emerald-600 p-2.5 rounded-lg text-white font-black text-xl tracking-tighter">INTI</div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-wide">INSTITUTO NACIONAL TÉCNICO INDUSTRIAL</h1>
+                    <div class="flex items-center gap-2 mt-0.5">
+                        <p class="text-xs text-slate-400">Control de Accesos Automático</p>
+                        <span id="sesion-rol-badge" class="text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-yellow-400 text-slate-900 uppercase"></span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-4">
+                <div class="flex flex-col items-center md:items-end bg-slate-800 px-5 py-2 rounded-xl border border-slate-700">
+                    <div id="reloj-digital" class="text-xl font-mono font-bold text-emerald-400 tracking-wider">00:00:00 AM</div>
+                    <div id="fecha-digital" class="text-[11px] text-slate-300 uppercase tracking-tight font-semibold mt-0.5">Cargando fecha...</div>
+                </div>
+                <button onclick="cerrarSesion()" class="bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white p-2.5 rounded-xl transition-all cursor-pointer shadow-sm border border-red-500/30" title="Cerrar Sesión">
+                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                </button>
+            </div>
+        </header>
+
+        <main class="flex-1 p-6 max-w-7xl mx-auto w-full grid grid-cols-1 gap-6">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4 flex flex-col gap-3 no-print">
+                <div class="flex flex-wrap items-center justify-between gap-3">
+                    <div class="flex flex-wrap gap-3">
+                        <button id="tab-inicio" onclick="mostrarPanel('inicio')" class="px-4 py-2 rounded-2xl bg-slate-900 text-white font-semibold shadow-sm cursor-pointer">Inicio</button>
+                        <button id="tab-usuarios" onclick="mostrarPanel('usuarios')" class="px-4 py-2 rounded-2xl bg-slate-200 text-slate-700 font-semibold shadow-sm cursor-pointer VISTA-DIRECTOR">Usuarios</button>
+                        <button id="tab-reportes" onclick="mostrarPanel('reportes')" class="px-4 py-2 rounded-2xl bg-slate-200 text-slate-700 font-semibold shadow-sm cursor-pointer VISTA-DIRECTOR">Reportes</button>
+                        <button id="tab-alertas" onclick="mostrarPanel('alertas')" class="px-4 py-2 rounded-2xl bg-slate-200 text-slate-700 font-semibold shadow-sm cursor-pointer VISTA-DIRECTOR">Alertas</button>
+                    </div>
+                    
+                    <div class="flex items-center gap-2">
+                        <input type="text" id="input-busqueda-nie" placeholder="NIE del Alumno (Reporte)" class="bg-slate-100 border-2 border-slate-200 focus:border-emerald-500 rounded-xl px-3 py-1.5 text-xs font-semibold focus:outline-none w-44">
+                        <button onclick="buscarReporteIndividualAlumno()" class="bg-emerald-600 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-sm flex items-center gap-1 cursor-pointer">
+                            <i data-lucide="search" class="w-3.5 h-3.5"></i> Ficha Individual
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sección de Reporte Individual -->
+            <section id="seccion-reporte-individual" class="hidden bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div class="flex items-center justify-between border-b pb-3 mb-4 no-print">
+                    <h4 class="text-xs font-bold text-slate-800 uppercase tracking-wide">Expediente de Asistencia Individual</h4>
+                    <div class="flex gap-2">
+                        <button onclick="window.print()" class="bg-slate-950 text-white font-bold px-4 py-1.5 rounded-xl text-xs uppercase flex items-center gap-1.5 cursor-pointer">
+                            <i data-lucide="printer" class="w-3.5 h-3.5"></i> Imprimir Expediente
+                        </button>
+                        <button onclick="document.getElementById('seccion-reporte-individual').classList.add('hidden')" class="bg-gray-200 text-slate-700 font-bold px-3 py-1.5 rounded-xl text-xs uppercase cursor-pointer">
+                            Cerrar
+                        </button>
+                    </div>
+                </div>
+                <div id="seccion-expediente-individual-imprimir" class="bg-white p-2"></div>
+            </section>
+
+            <section id="panel-inicio" class="grid grid-cols-1 lg:grid-cols-3 gap-6 no-print">
+                <div class="lg:col-span-2 flex flex-col gap-6">
+                    
+                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                        <div class="flex flex-col sm:flex-row gap-4 justify-between items-center">
+                            <div>
+                                <h3 class="text-gray-700 font-bold mb-1 flex items-center gap-2 text-sm">
+                                    <i data-lucide="camera" class="text-emerald-600"></i> Lector de Carnet QR
+                                </h3>
+                                <p class="text-xs text-slate-500">Escanee el carnet o digite el código de forma manual.</p>
+                            </div>
+                            <div class="flex items-center gap-3">
+                                <button id="btn-entrada" class="bg-emerald-600 text-white font-bold py-3.5 px-6 rounded-2xl shadow-lg border-b-4 border-emerald-800 transition-all cursor-pointer">AUTOMÁTICO</button>
+                            </div>
+                        </div>
+
+                        <div id="reader" class="w-full max-w-full mx-auto overflow-hidden rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 mb-4 mt-4 shadow-inner min-h-[280px]"></div>
+
+                        <div class="border-t pt-4">
+                            <label class="block text-gray-500 text-xs font-semibold mb-2">Ingreso manual alternativo:</label>
+                            <div class="flex gap-3">
+                                <input type="text" id="input-id" placeholder="Ej: 2936619" autofocus class="w-full bg-gray-50 border-2 border-gray-300 rounded-xl px-4 py-2 font-mono text-sm focus:outline-none focus:border-emerald-500">
+                                <button onclick="procesarManual()" class="bg-slate-800 hover:bg-slate-900 text-white font-bold px-5 rounded-xl shadow-md transition-colors text-sm cursor-pointer">Procesar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="modal-autoregistro" class="hidden bg-amber-50 border-2 border-amber-300 p-6 rounded-2xl shadow-md">
+                        <div class="flex items-center gap-2 text-amber-800 font-bold mb-2">
+                            <i data-lucide="user-plus"></i>
+                            <h4>¡NIE Nuevo Detectado! Registrar Estudiante</h4>
+                        </div>
+                        <p class="text-xs text-amber-700 mb-4">Este carnet no está en la base de datos de Firebase. Ingrese los datos del alumno una única vez para guardarlo.</p>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-semibold text-slate-600 block mb-1">NIE / Código</label>
+                                <input type="text" id="reg-nie" readonly class="w-full bg-gray-200 border rounded-xl px-3 py-2 text-sm font-mono focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-slate-600 block mb-1">Nombre Completo</label>
+                                <input type="text" id="reg-nombre" placeholder="Nombre del Alumno" class="w-full bg-white border rounded-xl px-3 py-2 text-sm focus:outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-slate-600 block mb-1">Año de Estudio</label>
+                                <select id="reg-ano" class="w-full bg-white border rounded-xl px-3 py-2 text-sm focus:outline-none">
+                                    <option value="1° Año">1° Año</option>
+                                    <option value="2° Año">2° Año</option>
+                                    <option value="3° Año">3° Año</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-slate-600 block mb-1">Especialidad / Sección</label>
+                                <input type="text" id="reg-especialidad" placeholder="Ej: BTV DS -A-" class="w-full bg-white border rounded-xl px-3 py-2 text-sm focus:outline-none">
+                            </div>
+                            <div class="sm:col-span-2 flex justify-end gap-3 mt-2">
+                                <button onclick="cancelarRegistro()" class="bg-gray-300 px-4 py-2 rounded-xl text-xs font-bold cursor-pointer">Cancelar</button>
+                                <button onclick="guardarNuevoEstudianteBD()" class="bg-amber-600 text-white px-5 py-2 rounded-xl text-xs font-bold shadow-md cursor-pointer">Guardar y Procesar</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="detalle-resultado" class="hidden bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+                        <div class="bg-slate-50 px-6 py-2.5 border-b border-gray-200 flex justify-between items-center">
+                            <h3 class="text-gray-500 text-xs font-bold tracking-wider uppercase">Resultado del Escaneo</h3>
+                            <span id="badge-status" class="text-xs font-bold px-2.5 py-1 rounded-full"></span>
+                        </div>
+                        <div class="p-6 flex flex-col sm:flex-row gap-6 items-center sm:items-start">
+                            <div class="w-24 h-24 bg-emerald-50 rounded-full flex items-center justify-center text-emerald-600 shadow-inner border border-emerald-100">
+                                <i data-lucide="user" class="w-12 h-12"></i>
+                            </div>
+                            <div class="flex-1 w-full">
+                                <h2 id="alumno-nombre" class="text-2xl font-bold text-gray-800 leading-tight"></h2>
+                                <div class="mt-1 flex flex-wrap gap-2 items-center">
+                                    <span id="alumno-nie" class="font-mono text-xs text-slate-500 font-bold"></span>
+                                    <span id="alumno-grado" class="text-slate-600 font-medium text-sm"></span>
+                                    <span id="alumno-especialidad" class="bg-emerald-50 text-emerald-800 font-bold text-xs px-2 py-0.5 rounded border border-emerald-200"></span>
+                                </div>
+                                <div class="mt-2 text-xs text-slate-500 font-mono">
+                                    <strong>Correo Encargado:</strong> <span id="alumno-correo" class="text-emerald-600 underline"></span>
+                                </div>
+                                <div class="grid grid-cols-2 gap-4 mt-4 bg-gray-50 p-3 rounded-xl border border-gray-100 text-xs font-mono">
+                                    <div>
+                                        <span class="text-gray-400 block text-[10px] uppercase font-semibold">Fecha y Hora</span>
+                                        <span id="registro-hora" class="text-gray-800 font-bold text-sm"></span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-400 block text-[10px] uppercase font-semibold">Operación</span>
+                                        <span id="registro-tipo" class="font-bold text-sm uppercase"></span>
+                                    </div>
+                                </div>
+                                <div id="alerta-box" class="mt-4 text-center font-bold py-2.5 px-4 rounded-xl text-md shadow-sm"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 flex flex-col">
+                    <h3 class="text-gray-800 font-bold mb-4 flex items-center gap-2"><i data-lucide="list-ordered" class="text-emerald-600"></i> Bitácora General ( <span id="contador-logs">0</span> )</h3>
+                    <div id="lista-historial" class="flex flex-col gap-3 overflow-y-auto max-h-[480px] pr-1 text-xs">
+                        <p id="historial-vacio" class="text-gray-400 italic text-center my-auto">Ningún registro en esta sesión.</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="panel-usuarios" class="hidden bg-white rounded-2xl shadow-sm border border-gray-200 p-6 no-print">
+                <h3 class="text-gray-800 font-bold mb-4 flex items-center gap-2"><i data-lucide="users" class="text-emerald-600"></i> Base de Datos de Alumnos en Firebase</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm text-slate-700 border-separate border-spacing-y-2">
+                        <thead>
+                            <tr class="text-xs uppercase text-slate-500">
+                                <th class="px-4 py-2">NIE / Código</th>
+                                <th class="px-4 py-2">Nombre del Alumno</th>
+                                <th class="px-4 py-2">Año</th>
+                                <th class="px-4 py-2">Especialidad / Sección</th>
+                                <th class="px-4 py-2">Correo Institucional</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabla-usuarios">
+                            <tr><td colspan="5" class="p-4 text-center text-slate-400 italic">Cargando alumnos desde Firebase...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="panel-reportes" class="hidden bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+                <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4 no-print">
+                    <h3 class="text-gray-800 font-bold flex items-center gap-2"><i data-lucide="bar-chart-2" class="text-emerald-600"></i> Métricas de Asistencia Histórica</h3>
+                    
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div>
+                            <select id="filtro-ano" class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-500">
+                                <option value="TODOS">Todos los Años</option>
+                                <option value="1° Año">1° Año</option>
+                                <option value="2° Año">2° Año</option>
+                                <option value="3° Año">3° Año</option>
+                            </select>
+                        </div>
+                        <div>
+                            <input type="text" id="filtro-seccion" placeholder="Sección / Aula (Ej: BTV DS -A-)" class="bg-slate-50 border border-slate-300 rounded-xl px-3 py-2 text-xs font-semibold text-slate-700 focus:outline-none focus:border-emerald-500 w-44">
+                        </div>
+                        <button onclick="imprimirReportePorSeccion()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl shadow-sm transition-all cursor-pointer text-xs uppercase tracking-wide flex items-center gap-2">
+                            <i data-lucide="eye" class="w-4 h-4"></i> Ver Reportes
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 no-print">
+                    <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <p class="text-xs uppercase text-slate-500 font-semibold">Total Entradas</p>
+                        <p id="reporte-entradas" class="text-2xl font-bold text-emerald-600">0</p>
+                    </div>
+                    <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <p class="text-xs uppercase text-slate-500 font-semibold">Total Salidas</p>
+                        <p id="reporte-salidas" class="text-2xl font-bold text-blue-600">0</p>
+                    </div>
+                    <div class="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                        <p class="text-xs uppercase text-slate-500 font-semibold">Total Alertas Horarias</p>
+                        <p id="reporte-alertas" class="text-2xl font-bold text-amber-600">0</p>
+                    </div>
+                </div>
+
+                <div id="preview-reporte-seccion" class="hidden mt-6 border border-slate-200 rounded-2xl bg-slate-50 p-4">
+                </div>
+            </section>
+
+            <section id="panel-alertas" class="hidden bg-white rounded-2xl shadow-sm border border-gray-200 p-6 no-print">
+                <h4 class="text-sm font-bold text-slate-800 mb-3 uppercase tracking-wider flex items-center gap-2">
+                    <i data-lucide="alert-triangle" class="text-red-500"></i> Registro Histórico de Incidencias Horarias
+                </h4>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-xs text-slate-700 border border-slate-200 rounded-xl">
+                        <tbody id="tabla-reporte-incidencias" class="divide-y divide-slate-100">
+                            <tr><td colspan="5" class="p-4 text-center italic text-slate-400">Sin incidencias horarias registradas.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </main>
+
+        <footer class="bg-slate-900 text-slate-500 text-xs text-center py-3 border-t border-slate-800 mt-auto no-print">
+            &copy; 2026 INTI - AccessTrace Control Automatizado.
+        </footer>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getDatabase, ref, push, set, get, child, onValue, query, orderByChild, equalTo } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+        // Inicializar EmailJS correctamente una sola vez
+        emailjs.init({ publicKey: "P_AKlyT_MOJwVhxyW" });
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCAPM41CCKo2H4eTXoWtFNR8g-RKCqqTm8",
+            authDomain: "sistema-de-control-ing-y-salid.firebaseapp.com",
+            databaseURL: "https://sistema-de-control-ing-y-salid-default-rtdb.firebaseio.com/",
+            projectId: "sistema-de-control-ing-y-salid",
+            storageBucket: "sistema-de-control-ing-y-salid.firebasestorage.app",
+            messagingSenderId: "426232560902",
+            appId: "1:426232560902:web:84d0e50454446beffe3287"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getDatabase(app);
+
+        window.buscarEstudianteEnFirebase = async function(nie) {
+            const dbRef = ref(db);
+            try {
+                const snapshot = await get(child(dbRef, `alumnos/${nie}`));
+                if (snapshot.exists()) return snapshot.val();
+                return null;
+            } catch (error) { return null; }
+        };
+
+        window.guardarEstudianteEnFirebase = async function(nie, datosAlumno) {
+            try {
+                await set(ref(db, `alumnos/${nie}`), datosAlumno);
+                return true;
+            } catch (error) { return false; }
+        };
+
+        window.registrarAccesoEnBitacoraFirebase = function(registro) {
+            const bitacoraRef = ref(db, 'bitacora');
+            push(bitacoraRef, registro).catch(err => console.error(err));
+            
+            const historicoRef = ref(db, 'bitacora_historica');
+            push(historicoRef, registro).catch(err => console.error(err));
+        };
+
+        window.consultarHistorialAlumnoFirebase = async function(nie) {
+            const historicoRef = ref(db, 'bitacora_historica');
+            const consulta = query(historicoRef, orderByChild('codigoAlumno'), equalTo(nie));
+            try {
+                const snapshot = await get(consulta);
+                if (snapshot.exists()) {
+                    let registros = [];
+                    snapshot.forEach(hijo => {
+                        registros.push(hijo.val());
+                    });
+                    return registros.sort((a,b) => b.timestamp - a.timestamp);
+                }
+                return [];
+            } catch(e) {
+                console.error(e);
+                return [];
+            }
+        };
+
+        onValue(ref(db, 'bitacora_historica'), (snapshot) => {
+            if (snapshot.exists()) {
+                let registrosCargados = [];
+                snapshot.forEach((childSnapshot) => {
+                    const data = childSnapshot.val();
+                    if (data.codigoAlumno && data.codigoAlumno !== "") {
+                        registrosCargados.push(data);
+                    }
+                });
+                registrosCargados.sort((a, b) => b.timestamp - a.timestamp);
+                window.actualizarHistorialDesdeFirebase(registrosCargados);
+            }
+        });
+
+        onValue(ref(db, 'alumnos'), (snapshot) => {
+            const tabla = document.getElementById('tabla-usuarios');
+            if (!snapshot.exists()) {
+                tabla.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-slate-400 italic">No hay alumnos guardados aún.</td></tr>';
+                return;
+            }
+            tabla.innerHTML = '';
+            snapshot.forEach((childSnapshot) => {
+                const nie = childSnapshot.key;
+                const alum = childSnapshot.val();
+                tabla.innerHTML += `
+                    <tr class="bg-slate-50 border border-slate-200">
+                        <td class="px-4 py-2.5 font-bold font-mono text-slate-800">${nie}</td>
+                        <td class="px-4 py-2.5 font-semibold text-slate-900">${alum.nombre}</td>
+                        <td class="px-4 py-2.5">${alum.grado}</td>
+                        <td class="px-4 py-2.5 text-xs font-semibold text-slate-600">${alum.especialidad}</td>
+                        <td class="px-4 py-2.5 font-mono text-xs text-blue-600">${alum.correo}</td>
+                    </tr>
+                `;
+            });
+        });
+    </script>
+
+    <script>
+        let historialAccesos = [];       
+        let modoActivo = "ENTRADA";      
+        let temporizadorAlerta;          
+        let escaneoBloqueado = false;    
+        let rolUsuarioActual = "";       
+        let alumnosBloqueadosTemporalmente = {}; 
+
+        window.actualizarHistorialDesdeFirebase = function(nuevosDatos) {
+            historialAccesos = nuevosDatos;
+            actualizarHistorialHTML();
+            actualizarReportes();
+        };
+
+        function procesarLogin() {
+            const userIn = document.getElementById('login-usuario').value.trim().toLowerCase();
+            const passIn = document.getElementById('login-password').value;
+            const errorBox = document.getElementById('login-error');
+
+            errorBox.classList.add('hidden');
+
+            if (userIn === "director" && passIn === "director123") {
+                rolUsuarioActual = "director";
+                inicializarSesiónAutorizada();
+            } else if (userIn === "operador" && passIn === "operador123") {
+                rolUsuarioActual = "operador";
+                inicializarSesiónAutorizada();
+            } else {
+                errorBox.classList.remove('hidden'); 
+            }
+        }
+
+        function inicializarSesiónAutorizada() {
+            document.getElementById('pantalla-login').classList.add('hidden');
+            document.getElementById('interfaz-sistema').classList.remove('hidden');
+
+            document.getElementById('sesion-rol-badge').innerText = rolUsuarioActual;
+            document.getElementById('sesion-rol-badge').className = rolUsuarioActual === "director"
+                ? "text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-yellow-400 text-slate-900 uppercase"
+                : "text-[9px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-600 text-white uppercase";
+
+            const elementosDirector = document.querySelectorAll('.VISTA-DIRECTOR');
+            elementosDirector.forEach(el => {
+                if (rolUsuarioActual === "operador") {
+                    el.classList.add('hidden');
+                } else {
+                    el.classList.remove('hidden');
+                }
+            });
+
+            mostrarPanel('inicio');
+            if (window.lucide) lucide.createIcons(); 
+        }
+
+        function cerrarSesion() {
+            rolUsuarioActual = "";
+            document.getElementById('login-usuario').value = "";
+            document.getElementById('login-password').value = "";
+            document.getElementById('interfaz-sistema').classList.add('hidden');
+            document.getElementById('pantalla-login').classList.remove('hidden');
+        }
+
+        function actualizarReloj() {
+            const ahora = new Date();
+            let horas = antesDeDoce(ahora.getHours());
+            const minutos = String(ahora.getMinutes()).padStart(2, '0');
+            const segundos = String(ahora.getSeconds()).padStart(2, '0');
+            const ampm = ahora.getHours() >= 12 ? 'PM' : 'AM';
+            document.getElementById('reloj-digital').innerText = `${horas}:${minutos}:${segundos} ${ampm}`;
+            document.getElementById('fecha-digital').innerText = ahora.toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+        }
+
+        function antesDeDoce(hr) {
+            hr = hr % 12;
+            return String(hr ? hr : 12).padStart(2, '0');
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            actualizarReloj();
+            setInterval(actualizarReloj, 1000); 
+
+            const inputPassword = document.getElementById('login-password');
+            if (inputPassword) {
+                inputPassword.addEventListener('keyup', (e) => {
+                    if (e.key === 'Enter') procesarLogin();
+                });
+            }
+
+            try {
+                if (typeof Html5QrcodeScanner !== 'undefined') {
+                    const scanner = new Html5QrcodeScanner('reader', { fps: 15, qrbox: 240 }, false);
+                    scanner.render((texto) => {
+                        if (!document.getElementById('interfaz-sistema').classList.contains('hidden')) {
+                            procesarNIE(texto.trim());
+                        }
+                    }, () => {});
+                }
+            } catch (e) {
+                console.error(e);
+            }
+
+            if (window.lucide) lucide.createIcons();
+        });
+
+        function mostrarPanel(panel) {
+            if (rolUsuarioActual === 'operador' && panel === 'usuarios') {
+                panel = 'inicio';
+            }
+
+            ['inicio', 'usuarios', 'reportes', 'alertas'].forEach(p => {
+                const panelDoc = document.getElementById(`panel-${p}`);
+                const tabDoc = document.getElementById(`tab-${p}`);
+                if (panelDoc) panelDoc.classList.toggle('hidden', p !== panel);
+                if (tabDoc) tabDoc.className = p === panel
+                    ? 'px-4 py-2 rounded-2xl bg-slate-900 text-white font-semibold shadow-sm cursor-pointer'
+                    : 'px-4 py-2 rounded-2xl bg-slate-200 text-slate-700 font-semibold shadow-sm cursor-pointer';
+            });
+
+            if (rolUsuarioActual === 'operador') {
+                document.querySelectorAll('.VISTA-DIRECTOR').forEach(el => el.classList.add('hidden'));
+            }
+
+            if (panel === 'reportes' || panel === 'alertas') {
+                actualizarReportes();
+            }
+
+            try {
+                if (window.lucide) lucide.createIcons();
+            } catch (e) {}
+        }
+
+        function evaluarIncidenciaHoraria(tipoOperacion) {
+            const ahora = new Date();
+            const tiempoEnMinutos = (ahora.getHours() * 60) + ahora.getMinutes();
+            const horaLimiteEntrada = 7 * 60; 
+            const horaOficialSalidaTarde = 16 * 60; 
+
+            if (tipoOperacion === 'ENTRADA') {
+                if (tiempoEnMinutos > horaLimiteEntrada) return 'ENTRADA_TARDIA';
+            } else if (tipoOperacion === 'SALIDA') {
+                if (tiempoEnMinutos < horaOficialSalidaTarde) return 'SALIDA_ANTICIPADA';
+            }
+            return 'NORMAL';
+        }
+
+        async function procesarNIE(nie) {
+            if (!nie || escaneoBloqueado) return;
+
+            if (alumnosBloqueadosTemporalmente[nie]) {
+                return; 
+            }
+
+            document.getElementById('modal-autoregistro').classList.add('hidden');
+
+            const alumno = await window.buscarEstudianteEnFirebase(nie);
+            if (alumno) {
+                alumnosBloqueadosTemporalmente[nie] = true;
+                setTimeout(() => {
+                    delete alumnosBloqueadosTemporalmente[nie];
+                }, 1000); 
+
+                escaneoBloqueado = false; 
+                
+                const hoyString = new Date().toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                const registrosDeHoy = historialAccesos.filter(r => r.codigoAlumno === nie && r.fecha === hoyString);
+                
+                let operacionDeterminada = "ENTRADA";
+                if (registrosDeHoy.length > 0) {
+                    const ultimoMarcajeHoy = registrosDeHoy[0]; 
+                    if (ultimoMarcajeHoy.tipo === "ENTRADA") {
+                        operacionDeterminada = "SALIDA";
+                    }
+                }
+
+                const ahora = new Date();
+                const minutosActuales = (ahora.getHours() * 60) + ahora.getMinutes();
+                const minutesLimitEscape = (11 * 60) + 45; 
+
+                if (operacionDeterminada === "SALIDA" && minutosActuales < minutesLimitEscape) {
+                    ejecutarAsistenciaModificada(nie, alumno, "SALIDA", "INTENTO_FUGA");
+                    
+                    // EJECUCIÓN DIRECTA AUTOMÁTICA DE ALERTA DE FUGA
+                    enviarCorreoNotificacionFuga(nie, alumno, DiagnosticTime(new Date()));
+                } else {
+                    ejecutarAsistenciaModificada(nie, alumno, operacionDeterminada, null);
+                }
+
+            } else {
+                document.getElementById('reg-nie').value = nie;
+                document.getElementById('reg-nombre').value = '';
+                document.getElementById('reg-especialidad').value = '';
+                document.getElementById('modal-autoregistro').classList.remove('hidden');
+                document.getElementById('reg-nombre').focus();
+            }
+        }
+
+        // --- FUNCIONES DE CORREO AUTOMÁTICO INTEGRADAS DIRECTAMENTE ---
+        function enviarCorreoNotificacionFuga(nie, alumno, horaFuga) {
+            console.log(`Disparando Alerta Automática de Fuga para: ${alumno.nombre}`);
+            
+            const correoDestinatario = alumno.correo_encargado || alumno.correo || "correo_prueba@ejemplo.com";
+
+            emailjs.send("service_inti_alertas", "template_fuga_alumno", {
+                student_nie: nie,
+                student_name: alumno.nombre,
+                student_section: `${alumno.grado} ${alumno.especialidad}`,
+                escape_time: horaFuga,
+                parent_email: correoDestinatario
+            })
+            .then(res => console.log('Alerta de fuga enviada automáticamente:', res.status))
+            .catch(err => console.error('Fallo al despachar correo de fuga:', err));
+        }
+
+        function procesarManual() {
+            const input = document.getElementById('input-id');
+            if (input.value.trim() !== '') {
+                escaneoBloqueado = false;
+                procesarNIE(input.value.trim());
+                input.value = '';
+            }
+        }
+
+        function cancelarRegistro() {
+            document.getElementById('modal-autoregistro').classList.add('hidden');
+        }
+
+        async function guardarNuevoEstudianteBD() {
+            const nie = document.getElementById('reg-nie').value.trim();
+            const nombre = document.getElementById('reg-nombre').value.trim();
+            const grado = document.getElementById('reg-ano').value;
+            const specialtyInput = document.getElementById('reg-especialidad').value.trim();
+
+            if (!nombre || !specialtyInput) return; 
+
+            const nuevoAlumno = {
+                nombre: nombre,
+                grado: grado,
+                especialidad: specialtyInput,
+                correo: `${nie}@inti.edu.sv`,
+                correo_encargado: "" 
+            };
+
+            const guardadoExitoso = await window.guardarEstudianteEnFirebase(nie, nuevoAlumno);
+
+            if (guardadoExitoso) {
+                document.getElementById('modal-autoregistro').classList.add('hidden');
+                escaneoBloqueado = false;
+                
+                alumnosBloqueadosTemporalmente[nie] = true;
+                setTimeout(() => {
+                    delete alumnosBloqueadosTemporalmente[nie];
+                }, 1000);
+
+                ejecutarAsistenciaModificada(nie, nuevoAlumno, "ENTRADA", null);
+            }
+        }
+
+        function ejecutarAsistenciaModificada(nie, estudiante, operacion, condicionEspecial) {
+            const divResultado = document.getElementById('detalle-resultado');
+            divResultado.classList.remove('hidden');
+
+            const ahora = new Date();
+            const horaString = DiagnosticTime(ahora);
+            const fechaString = ahora.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+            let estadoHorario = evaluarIncidenciaHoraria(operacion);
+            
+            if (condicionEspecial) {
+                estadoHorario = condicionEspecial;
+            }
+
+            const esIncidencia = estadoHorario !== 'NORMAL';
+
+            // EJECUCIÓN DIRECTA AUTOMÁTICA DE ALERTA POR TARDANZA
+            if (estadoHorario === 'ENTRADA_TARDIA') {
+                const correoDestinatario = estudiante.correo_encargado || estudiante.correo || "correo_prueba@ejemplo.com";
+                console.log(`Disparando Alerta Automática de Tardanza a: ${correoDestinatario}`);
+                emailjs.send("service_inti_alertas", "template_tardanza_alumno", {
+                    student_nie: nie,
+                    student_name: estudiante.nombre,
+                    student_section: `${estudiante.grado} ${estudiante.especialidad}`,
+                    arrival_time: horaString,
+                    parent_email: correoDestinatario
+                })
+                .then(res => console.log('Notificación de tardanza enviada automáticamente.'))
+                .catch(err => console.error('Error al enviar notificación de tardanza:', err));
+            }
+
+            const nuevoRegistro = {
+                fecha: fechaString,
+                textFecha: fechaString, 
+                hora: horaString,
+                tipo: operacion,
+                timestamp: Date.now(),
+                incidencia: estadoHorario,
+                codigoAlumno: nie,
+                nombre: estudiante.nombre,
+                especialidad: estudiante.especialidad,
+                grado: estudiante.grado,
+                correo: estudiante.correo,
+                correo_encargado: estudiante.correo_encargado || ""
+            };
+
+            let etiquetaBadge = esIncidencia ? `AVISO: ${estadoHorario.replace('_', ' ')}` : 'VÁLIDO';
+            document.getElementById('badge-status').className = esIncidencia
+                ? 'text-xs font-bold px-2.5 py-1 rounded-full bg-amber-100 text-amber-800'
+                : 'text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800';
+            
+            if (estadoHorario === "INTENTO_FUGA") {
+                document.getElementById('badge-status').className = 'text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-800';
+                etiquetaBadge = "ALERTA: INTENTO DE FUGA";
+            }
+
+            document.getElementById('badge-status').innerText = etiquetaBadge;
+            document.getElementById('alumno-nombre').innerText = estudiante.nombre;
+            document.getElementById('alumno-nie').innerText = `NIE: ${nie} | `;
+            document.getElementById('alumno-grado').innerText = estudiante.grado + ' - ';
+            document.getElementById('alumno-especialidad').innerText = estudiante.especialidad;
+            
+            document.getElementById('alumno-correo').innerText = estudiante.correo_encargado || estudiante.correo;
+            
+            document.getElementById('registro-hora').innerText = `${fechaString} | ${horaString}`;
+            document.getElementById('registro-tipo').innerText = operacion;
+            document.getElementById('registro-tipo').className = operacion === 'ENTRADA' ? 'text-emerald-600 font-bold' : 'text-blue-600 font-bold';
+
+            const alertaBox = document.getElementById('alerta-box');
+            if (estadoHorario === 'INTENTO_FUGA') {
+                alertaBox.className = 'mt-4 text-center font-black py-2.5 px-4 rounded-xl text-md bg-red-700 text-white shadow-md block';
+                alertaBox.innerText = '⚠️ GRAVE: INTENTO DE FUGA DETECTADO';
+                lanzarAlertaCentralAutomatica('INTENTO DE FUGA', estudiante.nombre, `Saliendo sin autorización a las ${horaString}`, 'text-red-700', 'bg-red-100');
+            } else if (estadoHorario === 'SALIDA_ANTICIPADA') {
+                alertaBox.className = 'mt-4 text-center font-black py-2.5 px-4 rounded-xl text-md bg-red-600 text-white shadow-md block';
+                alertaBox.innerText = '⚠️ ALERTA: SALIDA ANTES DE TIEMPO';
+                lanzarAlertaCentralAutomatica('SALIDA ANTICIPADA', estudiante.nombre, `Registró salida antes de tiempo a las ${horaString}`, 'text-red-600', 'bg-red-100');
+            } else if (estadoHorario === 'ENTRADA_TARDIA') {
+                alertaBox.className = 'mt-4 text-center font-black py-2.5 px-4 rounded-xl text-md bg-amber-500 text-white shadow-md block';
+                alertaBox.innerText = '⚠️ ATENCIÓN: ENTRADA TARDÍA';
+                lanzarAlertaCentralAutomatica('ENTRADA TARDÍA', estudiante.nombre, `Llegada retrasada registrada a las ${horaString}`, 'text-amber-600', 'bg-amber-100');
+            } else {
+                alertaBox.className = 'mt-4 text-center font-bold py-2.5 px-4 rounded-xl text-md bg-emerald-500 text-white block';
+                alertaBox.innerText = '✓ ACCESO AUTORIZADO';
+                lanzarAlertaCentralAutomatica('ACCESO PROCESADO', estudiante.nombre, `Acceso válido registrado a las ${horaString}`, 'text-emerald-600', 'bg-emerald-100');
+            }
+
+            if (typeof window.registrarAccesoEnBitacoraFirebase === 'function') {
+                window.registrarAccesoEnBitacoraFirebase(nuevoRegistro);
+            }
+        }
+
+        function DiagnosticTime(dt) {
+            return dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function lanzarAlertaCentralAutomatica(titulo, estudiante, detalles, colorTexto, colorIconoBg) {
+            clearTimeout(temporizadorAlerta); 
+
+            const modal = document.getElementById('modal-alerta-central');
+            const iconoBox = document.getElementById('alerta-central-icono');
+            const txtTitulo = document.getElementById('alerta-central-titulo');
+            const txtEstudiante = document.getElementById('alerta-central-estudiante');
+            const txtDetalles = document.getElementById('alerta-central-detalles');
+
+            txtTitulo.innerText = titulo;
+            txtTitulo.className = `text-2xl font-black uppercase tracking-wide mb-1 ${colorTexto}`;
+            txtEstudiante.innerText = estudiante;
+            txtDetalles.innerText = detalles;
+
+            iconoBox.className = `w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-3 shadow-inner ${colorIconoBg} ${colorTexto}`;
+            if (titulo.includes('SALIDA') || titulo.includes('FUGA')) {
+                iconoBox.innerHTML = '<i data-lucide="octagon-alert" class="w-9 h-9"></i>';
+            } else if (titulo.includes('TARDÍA')) {
+                iconoBox.innerHTML = '<i data-lucide="clock-alert" class="w-9 h-9"></i>';
+            } else {
+                iconoBox.innerHTML = '<i data-lucide="check-circle" class="w-9 h-9"></i>';
+            }
+
+            if (window.lucide) lucide.createIcons();
+            modal.classList.remove('hidden');
+
+            temporizadorAlerta = setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 1000); 
+        }
+
+        function actualizarHistorialHTML() {
+            const lista = document.getElementById('lista-historial');
+            if(document.getElementById('contador-logs')) {
+                document.getElementById('contador-logs').innerText = historialAccesos.length;
+            }
+            lista.innerHTML = '';
+
+            if (historialAccesos.length === 0) {
+                lista.innerHTML = '<p class="text-gray-400 italic text-center my-auto">Ningún registro en esta sesión.</p>';
+                return;
+            }
+
+            const muestraRápida = historialAccesos.slice(0, 30);
+
+            muestraRápida.forEach(reg => {
+                const colorBorde = reg.incidencia === 'SALIDA_ANTICIPADA' || reg.incidencia === 'INTENTO_FUGA'
+                    ? 'border-red-600 bg-red-50'
+                    : (reg.incidencia === 'ENTRADA_TARDIA'
+                        ? 'border-amber-500 bg-amber-50'
+                        : (reg.tipo === 'ENTRADA' ? 'border-emerald-500 bg-emerald-50' : 'border-blue-500 bg-blue-50'));
+                
+                const badgeColor = reg.incidencia === 'SALIDA_ANTICIPADA' || reg.incidencia === 'INTENTO_FUGA'
+                    ? 'bg-red-200 text-red-900'
+                    : (reg.incidencia === 'ENTRADA_TARDIA'
+                        ? 'bg-amber-200 text-amber-900'
+                        : (reg.tipo === 'ENTRADA' ? 'bg-emerald-200 text-emerald-800' : 'bg-blue-200 text-blue-800'));
+
+                let textoTag = reg.tipo;
+                if (reg.incidencia === 'SALIDA_ANTICIPADA') textoTag = 'S. ANTICIPADA';
+                if (reg.incidencia === 'ENTRADA_TARDIA') textoTag = 'E. TARDÍA';
+                if (reg.incidencia === 'INTENTO_FUGA') textoTag = 'FUGA';
+
+                lista.innerHTML += `
+                    <div class="border-l-4 ${colorBorde} p-2.5 rounded-r-lg shadow-xs flex justify-between items-center">
+                        <div>
+                            <p class="font-bold text-gray-800">${reg.nombre}</p>
+                            <p class="text-slate-600 text-[10px] font-semibold">${reg.grado} · ${reg.especialidad}</p>
+                            <span class="text-[9px] font-mono text-slate-400">${reg.fecha || ''}</span>
+                        </div>
+                        <div class="text-right flex flex-col items-end gap-1">
+                            <span class="font-mono font-bold text-gray-700">${reg.hora}</span>
+                            <span class="px-1.5 py-0.5 rounded text-[9px] font-bold ${badgeColor}">${textoTag}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function actualizarReportes() {
+            if(document.getElementById('reporte-entradas')) {
+                document.getElementById('reporte-entradas').innerText = historialAccesos.filter(r => r.tipo === 'ENTRADA').length;
+                document.getElementById('reporte-salidas').innerText = historialAccesos.filter(r => r.tipo === 'SALIDA').length;
+                document.getElementById('reporte-alertas').innerText = historialAccesos.filter(r => r.incidencia !== 'NORMAL').length;
+            }
+
+            const tablaReporte = document.getElementById('tabla-reporte-incidencias');
+            const listaIncidencias = historialAccesos.filter(r => r.incidencia !== 'NORMAL');
+
+            if (!tablaReporte) return;
+
+            if (listaIncidencias.length === 0) {
+                tablaReporte.innerHTML = '<tr><td colspan="5" class="p-4 text-center italic text-slate-400">Sin incidencias históricas.</td></tr>';
+                return;
+            }
+
+            tablaReporte.innerHTML = '';
+            listaIncidencias.forEach(reg => {
+                let badg = '<span class="bg-amber-100 text-amber-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">ENTRADA TARDÍA</span>';
+                if (reg.incidencia === 'SALIDA_ANTICIPADA') {
+                    badg = '<span class="bg-red-100 text-red-800 text-[10px] font-extrabold px-2 py-0.5 rounded-full">SALIDA PREMATURA</span>';
+                } else if (reg.incidencia === 'INTENTO_FUGA') {
+                    badg = '<span class="bg-red-700 text-white text-[10px] font-extrabold px-2 py-0.5 rounded-full">INTENTO DE FUGA</span>';
+                }
+
+                tablaReporte.innerHTML += `
+                    <tr class="hover:bg-slate-50 bg-white border-b transition-colors font-medium">
+                        <td class="p-3 font-mono font-bold text-slate-900">${reg.codigoAlumno}</td>
+                        <td class="p-3 text-slate-800 font-bold">${reg.nombre}</td>
+                        <td class="p-3 text-slate-600">${reg.grado} - ${reg.especialidad}</td>
+                        <td class="p-3 font-mono font-bold text-slate-600">${reg.fecha || ''} | ${reg.hora}</td>
+                        <td class="p-3">${badg}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function imprimirReportePorSeccion() {
+            if (historialAccesos.length === 0) {
+                alert('No hay registros de asistencias guardados en Firebase.');
+                return;
+            }
+
+            const filtroAno = document.getElementById('filtro-ano').value;
+            const filtroSeccion = document.getElementById('filtro-seccion').value.trim().toLowerCase();
+
+            const registrosFiltrados = historialAccesos.filter(reg => {
+                const cumpleAno = (filtroAno === 'TODOS' || reg.grado === filtroAno);
+                const cumpleSeccion = (filtroSeccion === '' || reg.especialidad.toLowerCase().includes(filtroSeccion));
+                return cumpleAno && cumpleSeccion;
+            });
+
+            if (registrosFiltrados.length === 0) {
+                alert('No se encontraron reportes históricos que coincidan con los filtros indicados.');
+                return;
+            }
+
+            const seccionesAgrupadas = registrosFiltrados.reduce((grupos, registro) => {
+                const nombreSeccion = `${registro.grado} - ${registro.especialidad}`;
+                if (!grupos[nombreSeccion]) grupos[nombreSeccion] = [];
+                grupos[nombreSeccion].push(registro);
+                return grupos;
+            }, {});
+
+            const previewBox = document.getElementById('preview-reporte-seccion');
+            previewBox.classList.remove('hidden');
+
+            let contenidoHTML = `
+                <div class="no-print flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-bold text-slate-800 uppercase tracking-wide">Vista previa del reporte de sección filtrada</h4>
+                    <button onclick="window.print()" class="bg-slate-900 hover:bg-slate-800 text-white font-bold px-3 py-2 rounded-xl text-xs uppercase tracking-wide cursor-pointer flex items-center gap-1.5">
+                        <i data-lucide="printer" class="w-3.5 h-3.5"></i> Imprimir Reporte Seleccionado
+                    </button>
+                </div>
+                <div id="contenido-preview-reporte" class="bg-white rounded-xl border border-slate-200 p-4 modo-impresion-selectiva">
+                    <div class="text-sm text-slate-700 pb-4 mb-4 border-b">
+                        <h3 class="text-lg font-black text-slate-900 uppercase">INSTITUTO NACIONAL TÉCNICO INDUSTRIAL</h3>
+                        <p class="font-bold text-slate-800">Reporte de Asistencias Histórico General</p>
+                        <p class="text-xs text-slate-500 mt-1">Fecha de Consulta: ${new Date().toLocaleDateString('es-ES')} | Registros Encontrados: ${registrosFiltrados.length}</p>
+                    </div>
+            `;
+
+            Object.entries(seccionesAgrupadas).forEach(([seccion, registros], index) => {
+                const estaSeleccionado = index === 0;
+                
+                contenidoHTML += `
+                    <div class="mb-6 border border-slate-300 rounded-xl overflow-hidden bg-white card-seccion-reporte ${estaSeleccionado ? 'seleccionada-para-imprimir' : ''}">
+                        <div class="bg-slate-900 text-white px-3 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-3">
+                            <input type="radio" 
+                                   name="selector-impresion-aula" 
+                                   class="no-print w-4 h-4 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer bg-white accent-emerald-500" 
+                                   ${estaSeleccionado ? 'checked' : ''} 
+                                   onchange="alternarSeccionImprimir(this)">
+                            
+                            <span>Aula / Sección: ${seccion}</span>
+                        </div>
+                        <table class="w-full text-left text-xs text-slate-700 border-collapse">
+                            <thead>
+                                <tr class="bg-slate-100 border-b border-slate-300 text-slate-700 uppercase font-bold text-[10px]">
+                                    <th class="px-3 py-2.5">NIE</th>
+                                    <th class="px-3 py-2.5">Nombre Completo</th>
+                                    <th class="px-3 py-2.5">Fecha y Hora</th>
+                                    <th class="px-3 py-2.5">Operación</th>
+                                    <th class="px-3 py-2.5">Condición Institucional</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                registros.forEach(reg => {
+                    let clase = 'bg-emerald-100 text-emerald-800';
+                    let etiqueta = 'ASISTENCIA NORMAL';
+                    if (reg.incidencia === 'ENTRADA_TARDIA') {
+                        clase = 'bg-amber-100 text-amber-800';
+                        etiqueta = 'ENTRADA TARDÍA';
+                    } else if (reg.incidencia === 'SALIDA_ANTICIPADA') {
+                        clase = 'bg-red-100 text-red-800';
+                        etiqueta = 'SALIDA ANTICIPADA';
+                    } else if (reg.incidencia === 'INTENTO_FUGA') {
+                        clase = 'bg-red-700 text-white';
+                        etiqueta = 'INTENTO DE FUGA';
+                    } else if (reg.tipo === 'SALIDA') {
+                        etiqueta = 'SALIDA REGULAR';
+                        clase = 'bg-blue-100 text-blue-800';
+                    }
+
+                    contenidoHTML += `
+                        <tr class="border-b border-slate-200 hover:bg-slate-50">
+                            <td class="px-3 py-2 font-mono font-bold">${reg.codigoAlumno}</td>
+                            <td class="px-3 py-2 font-semibold text-slate-900">${reg.nombre}</td>
+                            <td class="px-3 py-2 font-medium">${reg.fecha || ''} | ${reg.hora}</td>
+                            <td class="px-3 py-2 uppercase font-bold text-[10px]">${reg.tipo}</td>
+                            <td class="px-3 py-2"><span class="px-2.5 py-0.5 rounded-full text-[9px] font-extrabold ${clase}">${etiqueta}</span></td>
+                        </tr>
+                    `;
+                });
+
+                contenidoHTML += `</tbody></table></div>`;
+            });
+
+            contenidoHTML += `</div>`;
+            previewBox.innerHTML = contenidoHTML;
+            previewBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            
+            if (window.lucide) lucide.createIcons();
+        }
+
+        window.alternarSeccionImprimir = function(radioInput) {
+            const contenedor = document.getElementById('contenido-preview-reporte');
+            if(!contenedor) return;
+            const tarjetas = contenedor.querySelectorAll('.card-seccion-reporte');
+            tarjetas.forEach(t => t.classList.remove('seleccionada-para-imprimir'));
+            
+            const tarjetaTarget = radioInput.closest('.card-seccion-reporte');
+            if (tarjetaTarget) {
+                tarjetaTarget.classList.add('seleccionada-para-imprimir');
+            }
+        };
+
+        async function buscarReporteIndividualAlumno() {
+            const nieBusqueda = document.getElementById('input-busqueda-nie').value.trim();
+            if (!nieBusqueda) {
+                alert("Por favor digite un NIE válido.");
+                return;
+            }
+
+            try {
+                const estudiante = await window.buscarEstudianteEnFirebase(nieBusqueda);
+                if (!estudiante) {
+                    alert("El alumno con el NIE indicado no existe en la base de datos de Firebase.");
+                    return;
+                }
+
+                const marcajesHistoricos = await window.consultarHistorialAlumnoFirebase(nieBusqueda);
+                const panelContenedor = document.getElementById('seccion-reporte-individual');
+                const cajaImpresion = document.getElementById('seccion-expediente-individual-imprimir');
+
+                let tablaMarcajesHTML = "";
+                if (marcajesHistoricos.length === 0) {
+                    tablaMarcajesHTML = `<tr><td colspan="4" class="p-3 text-center italic text-gray-400">No se encontraron marcajes históricos para este alumno.</td></tr>`;
+                } else {
+                    marcajesHistoricos.forEach(m => {
+                        let badgeEstilo = "bg-emerald-100 text-emerald-800";
+                        if (m.incidencia === "ENTRADA_TARDIA") badgeEstilo = "bg-amber-100 text-amber-800";
+                        if (m.incidencia === "SALIDA_ANTICIPADA") badgeEstilo = "bg-red-100 text-red-800";
+                        if (m.incidencia === "INTENTO_FUGA") badgeEstilo = "bg-red-700 text-white";
+
+                        tablaMarcajesHTML += `
+                            <tr class="border-b text-xs">
+                                <td class="p-2 font-mono font-bold">${m.fecha}</td>
+                                <td class="p-2 font-mono">${m.hora}</td>
+                                <td class="p-2 font-bold uppercase text-[10px]">${m.tipo}</td>
+                                <td class="p-2"><span class="px-2 py-0.5 rounded text-[9px] font-bold ${badgeEstilo}">${m.incidencia.replace('_', ' ')}</span></td>
+                            </tr>
+                        `;
+                    });
+                }
+
+                cajaImpresion.innerHTML = `
+                    <div class="border-2 border-slate-300 rounded-2xl p-6 bg-white shadow-sm">
+                        <div class="flex items-center justify-between border-b pb-4 mb-4">
+                            <div>
+                                <h3 class="text-md font-black text-slate-900 uppercase">INSTITUTO NACIONAL TÉCNICO INDUSTRIAL</h3>
+                                <p class="text-xs font-bold text-slate-700">Expediente de Asistencia Individual</p>
+                            </div>
+                            <div class="text-right text-[10px] text-slate-400 font-mono">
+                                Fecha consulta: ${new Date().toLocaleDateString('es-ES')}<br>AccessTrace · 2026
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 text-xs">
+                            <div>
+                                <p class="text-slate-500 font-semibold uppercase text-[9px]">Nombre Completo del Alumno</p>
+                                <p class="text-slate-900 font-bold text-sm">${estudiante.nombre}</p>
+                                <p class="text-slate-500 font-semibold uppercase text-[9px] mt-2">Grado y Sección</p>
+                                <p class="text-slate-800 font-medium">${estudiante.grado} - ${estudiante.especialidad}</p>
+                            </div>
+                            <div>
+                                <p class="text-slate-500 font-semibold uppercase text-[9px]">NIE / Código Internacional</p>
+                                <p class="text-slate-900 font-mono font-bold text-sm">${nieBusqueda}</p>
+                                <p class="text-slate-500 font-semibold uppercase text-[9px] mt-2">Correo Electrónico Encargado</p>
+                                <p class="text-emerald-700 underline font-mono">${estudiante.correo_encargado || estudiante.correo}</p>
+                            </div>
+                        </div>
+                        <h5 class="text-xs font-black uppercase text-slate-800 tracking-wide mb-2">Historial Cronológico de Marcajes</h5>
+                        <table class="w-full text-left border-collapse border border-slate-200">
+                            <thead>
+                                <tr class="bg-slate-900 text-white text-[10px] uppercase font-bold">
+                                    <th class="p-2">Fecha</th>
+                                    <th class="p-2">Hora de Marcaje</th>
+                                    <th class="p-2">Operación</th>
+                                    <th class="p-2">Condición Institucional</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${tablaMarcajesHTML}
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                panelContenedor.classList.remove('hidden');
+                panelContenedor.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                if (window.lucide) lucide.createIcons();
+            } catch (error) {
+                console.error("Error en reporte individual:", error);
+            }
+        }
+    </script>
+</body>
+</html>
